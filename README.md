@@ -39,7 +39,55 @@ python anki_export.py
 
 ---
 
-### 2. `list_decks.py`
+### 2. `search_to_html.py`
+
+> Export cards (including media and formatting) to an interactive **HTML viewer**, filtered by search terms or deck.
+
+**Usage:**
+
+```bash
+python search_to_html.py --terms "Keyword1,Keyword2" [--deck "Deck Name"] [--port 9090] [--cleanup]
+```
+
+**Options:**
+
+- `--terms` — Comma-separated terms (matched in text, tags, or deck).
+- `--deck` — Optional: Only include cards from this top-level deck.
+- `--port` — Optional: Port for local server (default: 8080).
+- `--cleanup` — Delete export folder after serving.
+
+**Example:**
+
+```bash
+python search_to_html.py --terms "Polymyositis,Dermatomyositis" --deck "Ankizin - HighYield Innere" --port 9090 --cleanup
+```
+
+### 3. `tag_to_deck.py`
+
+> Clone notes matching **all specified tags** into a **new or existing deck**.
+
+**Usage:**
+
+```bash
+python tag_to_deck.py 'tag1' 'tag2' --deck "Target Deck" [--shuffle]
+```
+
+**Options:**
+
+- `tag1 tag2 ...` — Tags the notes must include (AND logic).
+- `--deck` — Target deck name.
+- `--shuffle` — Shuffle the order of notes before cloning.
+
+**Example:**
+
+```bash
+python tag_to_deck.py Immuno Chemistry --deck "HighYield - Immunochem" --shuffle
+```
+
+---
+
+
+### 4. `list_decks.py`
 
 **Description:**
 
@@ -58,7 +106,8 @@ python list_decks.py
 
 ---
 
-### 3. `list_tags.py`
+
+### 5. `list_tags.py`
 
 **Description:**
 
@@ -78,29 +127,6 @@ python list_tags.py
 - Uses the `curses` library for smooth terminal navigation. 
 
 ![Tag Browsing Example](list_tags.gif)
-
----
-
-### 4. `tag_to_deck.py`
-
-**Description:**
-
-- Copies all Anki cards with a specific tag into a new deck.
-
-**Usage:**
-
-```sh
-python tag_to_deck.py <tag>
-```
-
-- `<tag>`: The tag to filter cards by.
-
-**Features:**
-
-- Retrieves all cards associated with the given tag.
-- Creates a new deck named `Copied_<tag>`.
-- Ensures uniqueness by modifying the first field of duplicate cards. 
-- The original **Tag Hierarchy** is translated into an identical **Deck Hierarchy**
 
 ---
 
