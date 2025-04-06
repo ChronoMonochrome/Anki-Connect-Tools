@@ -1,79 +1,93 @@
 import argparse
+import json
+import random
 import requests
-import sys
 
-ANKI_CONNECT_URL = "http://127.0.0.1:8765"
+ANKI_CONNECT_URL = "http://localhost:8765"
 
-def invoke(action, **params):
-    """Send a request to AnkiConnect."""
-    request_payload = {"action": action, "version": 6, "params": params}
-    response = requests.post(ANKI_CONNECT_URL, json=request_payload).json()
-    if "error" in response and response["error"] is not None:
-        print(f"AnkiConnect Error: {response['error']}")
-        sys.exit(1)
-    return response.get("result")
+def anki_request(action, params=None):
+    payload = {
+        "action": action,
+        "version": 6,
+        "params": params or {}
+    }
+    response = requests.post(ANKI_CONNECT_URL, json=payload).json()
+    if response.get("error") is not None:
+        raise Exception(f"AnkiConnect error: {response['error']}")
+    return response["result"]
 
-def get_notes_by_tag(tag):
-    """Retrieve all note IDs associated with the given tag."""
-    return invoke("findNotes", query=f"tag:{tag}")
+def find_cards_with_all_tags(all_tags):
+    tag_query = " ".join([f'tag:"{tag}"' for tag in all_tags])
+    return anki_request("findCards", {"query": tag_query})
 
-def get_note_fields(note_id):
-    """Retrieve fields and model for a note."""
-    notes = invoke("notesInfo", notes=[note_id])
-    return notes[0] if notes else None
+def get_unique_note_infos(card_ids):
+    notes_info = anki_request("cardsInfo", {"cards": card_ids})
+    note_ids = list({card["note"] for card in notes_info})
+    print(f" Corresponding unique notes found: {len(note_ids)}")
+    return anki_request("notesInfo", {"notes": note_ids})
 
-def create_deck(deck_name):
-    """Create a new deck."""
-    invoke("createDeck", deck=deck_name)
+def create_deck_if_not_exists(deck_name):
+    decks = anki_request("deckNames")
+    if deck_name not in decks:
+        print(f" Creating new deck: {deck_name}")
+        anki_request("createDeck", {"deck": deck_name})
 
-def add_card_to_deck(deck_name, model, fields, tags):
-    """Modify first field to bypass duplicate protection and add note."""
-    formatted_fields = {key: value["value"] for key, value in fields.items()}
+def add_cloned_notes(notes, target_deck, shuffle=False):
+    if shuffle:
+        random.shuffle(notes)
 
-    # Ensure uniqueness by modifying the first field slightly
-    first_field_key = list(formatted_fields.keys())[0]  # Get the first field name
-    formatted_fields[first_field_key] += " (copy)"  # Append "(copy)" to first field
+    new_notes = []
+    for note in notes:
+        model_name = note["modelName"]
+        fields = note["fields"]
+        tags = note["tags"]
 
-    # Add note to Anki
-    invoke("addNote", note={
-        "deckName": deck_name,
-        "modelName": model,
-        "fields": formatted_fields,
-        "tags": tags
-    })
+        cloned_fields = {}
+        for key, val in fields.items():
+            text = val.get("value", "")
+            if key.lower() == "text":
+                # Hidden anti-duplicate marker (invisible span)
+                rand_marker = f'<span style="display:none;">&#8204;{random.randint(100000, 999999)}</span>'
+                text += rand_marker
+            cloned_fields[key] = text
 
-def copy_cards(tag):
-    """Copy all cards with the given tag to the new deck."""
-    new_deck = f"Copied_{tag}"
-    print(f"Fetching notes with tag '{tag}'...")
-    note_ids = get_notes_by_tag(tag)
+        new_note = {
+            "deckName": target_deck,
+            "modelName": model_name,
+            "fields": cloned_fields,
+            "tags": tags,
+            "options": {
+                "allowDuplicate": True,
+                "duplicateScope": "deck"
+            }
+        }
+        new_notes.append(new_note)
 
-    if not note_ids:
-        print(f"No notes found with tag '{tag}'. Exiting.")
+    print(f" Creating {len(new_notes)} new notes...")
+    result = anki_request("addNotes", {"notes": new_notes})
+    print(" Notes added successfully.")
+    return result
+
+def main():
+    parser = argparse.ArgumentParser(description="Clone notes with specific tags into a new Anki deck.")
+    parser.add_argument("tags", metavar="TAG", type=str, nargs="+", help="Tags to match (notes must have ALL).")
+    parser.add_argument("--deck", required=True, help="Name of the target deck for cloned notes.")
+    parser.add_argument("--shuffle", action="store_true", help="Shuffle notes before copying.")
+    args = parser.parse_args()
+
+    print("\n Matching notes that have ALL of these tags:")
+    for tag in args.tags:
+        print(f"   - #{tag}")
+
+    card_ids = find_cards_with_all_tags(args.tags)
+    print(f"\nTotal cards matching all tags: {len(card_ids)}")
+    if not card_ids:
+        print(" No notes found matching all tags.")
         return
 
-    print(f"Found {len(note_ids)} notes. Creating deck '{new_deck}'...")
-    create_deck(new_deck)
-
-    for note_id in note_ids:
-        note_data = get_note_fields(note_id)
-        if not note_data:
-            print(f"Skipping note {note_id} (no data found).")
-            continue
-
-        model_name = note_data["modelName"]
-        fields = note_data["fields"]
-        tags = note_data["tags"]
-
-        print(f"Copying note {note_id} to deck '{new_deck}'...")
-        add_card_to_deck(new_deck, model_name, fields, tags)
-
-    print(f"✅ Successfully copied {len(note_ids)} cards to '{new_deck}'.")
+    note_infos = get_unique_note_infos(card_ids)
+    create_deck_if_not_exists(args.deck)
+    result = add_cloned_notes(note_infos, args.deck, shuffle=args.shuffle)
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Copy all Anki cards with a specific tag into a new deck.")
-    parser.add_argument("tag", help="Tag to filter cards by.")
-
-    args = parser.parse_args()
-    copy_cards(args.tag)
-
+    main()
