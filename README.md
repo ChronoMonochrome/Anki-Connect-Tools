@@ -41,7 +41,7 @@ python anki_export.py
 
 ### 2. `search_to_html.py`
 
-> Export cards (including media and formatting) to an interactive **HTML viewer**, filtered by search terms or deck.
+> Search for terms and combination of keywords in all cards and all tags of a selected deck. Cards are exported (including media and formatting) to an interactive **HTML viewer** and optionally saved into a local folder. 
 
 **Usage:**
 
