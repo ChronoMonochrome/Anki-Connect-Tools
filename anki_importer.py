@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import argparse
 import json
 import random
@@ -30,6 +31,24 @@ def setup_logging():
 
 setup_logging()
 logger = logging.getLogger()
+
+# --- EXTRACTED ANKI CARD TEMPLATES ---
+# This dictionary holds the front, back, and styling for each note model.
+# You can update this if you extract more note types or if templates change.
+ANKI_CARD_TEMPLATES = {
+    "JlabNote-JlabConverted-1": {
+        "Front Template": "{{Audio}}<br>\n{{Image}}<br><br>\n{{furigana:Jlab-ListeningFront}}<br><br>\n<div class=kanjipopup>{{furigana:Other-Front}}</div>\n<p style=\"font-size:50%;color=#C4C4C4\">Наведите/нажмите на кандзи, чтобы показать <a href=\"https://www.japanese-like-a-breeze.com/dont-learn-kanji-readings\">фуригану</a><p>{{RemarksFront}}\n<p style=\"font-size:70%;color:grey\">Источник этой карточки: {{Source}}<br>Измените текст с помощью <a href = \"https://www.japanese-like-a-breeze.com/addon-manual/\">дополнения Jlab (2110939339)</a> или <a href = \"https://www.japanese-like-a-breeze.com/course-without-addon/\">без дополнения</a>.</p>\n<p style=\"font-size:70%; color:grey\">Версия вашей колоды: <strong>{{Version}}</strong><br> Проверьте обновления <a href = \"https://www.japanese-like-a-breeze.com/guide-for-beginners/\">здесь.</a></p>\n<p style=\"font-size:70%; color:grey\">Вы можете поддержать Jlab на <a href=\"https://www.patreon.com/jlabjapanese/\">Patreon</a> - спасибо!</p><br>",
+        "Back Template": "<div style=\"text-align: left;\">{{RemarksBack}}<br>\n{{Jlab-Remarks}}<br>\nСсылки:<br>\n{{References}}<br>\n{{Other-Back}}<br>\n<p style=\"font-size:70%;color:grey\">Что-то неясно? Задайте вопрос, связанный с этой карточкой, используя эту {{QuestionLink}}.</p>\n<p style=\"font-size:70%; color:grey\">Вы можете поддержать Jlab на <a href=\"https://www.patreon.com/jlabjapanese/\">Patreon</a> - спасибо!</p></div>",
+        "Styling": ".card {\n font-family: arial;\n font-size: 20px;\n max-width: 800px;\n text-align: center;\n margin-left: auto;\n margin-right: auto;\n}\n.kanjipopup {\n font-family: arial;\n font-size: 20px;\n text-align: center;\n}\n.kanjipopup ruby rt { visibility: hidden; }\n.kanjipopup ruby:active rt { visibility: visible; }\n.kanjipopup ruby:hover rt { visibility: visible; }"
+    },
+    "InfoNote": {
+        "Front Template": "{{Image}}<br>{{Text}}",
+        "Back Template": "{{FrontSide}}",
+        "Styling": ".card {\n font-family: arial;\n font-size: 20px;\n max-width: 800px;\n text-align: left;\n margin-left: auto;\n margin-right: auto;\n color: black;\n background-color: white;\n}"
+    }
+}
+# --- END EXTRACTED ANKI CARD TEMPLATES ---
+
 
 # Helper function to generate a consistent integer ID from a string
 def generate_id_from_string(text_string):
@@ -101,22 +120,18 @@ def import_json_to_anki_deck(json_file_path, output_apkg_name="reimported_deck.a
             model_hash_input = model_name + ",".join(sorted(field_names))
             model_id = generate_id_from_string(model_hash_input) # Use our custom ID generation
 
-            # Basic templates: Front for question, Back for answer
-            # This uses all fields on the front, and all fields on the back after a line.
-            # You might need to customize this based on your actual Anki card templates
-            qfmt_fields = "<br>".join([f"{{{{{name}}}}}" for name in field_names])
-            afmt_fields = f'{{{{FrontSide}}}}<hr id="answer">{"<br>".join([f"{{{{{name}}}}}" for name in field_names])}'
+            # --- START: CUSTOM TEMPLATE INTEGRATION ---
+            qfmt = ANKI_CARD_TEMPLATES.get(model_name, {}).get("Front Template")
+            afmt = ANKI_CARD_TEMPLATES.get(model_name, {}).get("Back Template")
+            css = ANKI_CARD_TEMPLATES.get(model_name, {}).get("Styling")
 
-            # Consider adding a generic stylesheet if desired for the re-imported deck
-            model_css = """
-                .card {
-                    font-family: arial;
-                    font-size: 20px;
-                    text-align: center;
-                    color: black;
-                    background-color: white;
-                }
-            """
+            if not qfmt or not afmt or not css:
+                logger.warning(f"Warning: Custom templates not found for model '{model_name}'. Using generic templates. Card display may be incorrect.")
+                # Fallback to generic templates if custom ones aren't found
+                qfmt = "<br>".join([f"{{{{{name}}}}}" for name in field_names])
+                afmt = f'{{{{FrontSide}}}}<hr id="answer">{"<br>".join([f"{{{{{name}}}}}" for name in field_names])}'
+                css = """.card { font-family: arial; font-size: 20px; text-align: center; color: black; background-color: white; }"""
+            # --- END: CUSTOM TEMPLATE INTEGRATION ---
             
             model = genanki.Model(
                 model_id,
@@ -124,12 +139,12 @@ def import_json_to_anki_deck(json_file_path, output_apkg_name="reimported_deck.a
                 fields=[{"name": name} for name in field_names],
                 templates=[
                     {
-                        "name": "Card 1",
-                        "qfmt": qfmt_fields,
-                        "afmt": afmt_fields,
+                        "name": "Card 1", # Assuming all models have a single card type named "Card 1"
+                        "qfmt": qfmt,
+                        "afmt": afmt,
                     },
                 ],
-                css=model_css
+                css=css
             )
             models[model_name] = model
             logger.info(f"Created Anki Model: '{model_name}' (ID: {model_id}) with fields: {', '.join(field_names)}")
